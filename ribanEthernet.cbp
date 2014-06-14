@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="ribanEthernet" />
+		<Option pch_mode="2" />
+		<Option compiler="avrgcc" />
+		<Build>
+			<Target title="atmega328">
+				<Option output="../../lib/$(MCU)/ribanethernet.a" prefix_auto="1" extension_auto="0" />
+				<Option working_dir="" />
+				<Option object_output="objs/$(MCU)" />
+				<Option type="2" />
+				<Option compiler="avrgcc" />
+				<Compiler>
+					<Add option="-mmcu=$(MCU)" />
+					<Add option="-DF_CPU=16000000L" />
+					<Add option="-D__AVR_ATmega328__" />
+					<Add directory="$(ARDUINO)/hardware/arduino/variants/standard" />
+					<Add directory="include" />
+				</Compiler>
+				<Environment>
+					<Variable name="MCU" value="atmega328" />
+				</Environment>
+			</Target>
+			<Environment>
+				<Variable name="ARDUINO" value="../.." />
+			</Environment>
+		</Build>
+		<Compiler>
+			<Add option="-Os" />
+			<Add option="-Wall" />
+			<Add option="-fno-exceptions" />
+			<Add option="-ffunction-sections" />
+			<Add option="-fdata-sections" />
+			<Add option="-DARDUINO=105" />
+			<Add directory="$(ARDUINO)/hardware/arduino/cores/arduino" />
+		</Compiler>
+		<Linker>
+			<Add option="-Wl,--gc-sections" />
+			<Add option="-mmcu=$(MCU)" />
+		</Linker>
+		<ExtraCommands>
+			<Add after="avr-size $(TARGET_OUTPUT_FILE)" />
+			<Mode after="always" />
+		</ExtraCommands>
+		<Unit filename="include/enc28j60.h" />
+		<Unit filename="include/ipv4.h" />
+		<Unit filename="include/ribanEthernet.h" />
+		<Unit filename="include/ribanethernetprotocol.h" />
+		<Unit filename="include/txlistentry.h" />
+		<Unit filename="src/enc28j60.cpp" />
+		<Unit filename="src/ipv4.cpp" />
+		<Unit filename="src/ribanEthernet.cpp" />
+		<Unit filename="src/ribanethernetprotocol.cpp" />
+		<Unit filename="src/txlistentry.cpp" />
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<debugger />
+			<DoxyBlocks>
+				<comment_style block="0" line="0" />
+				<doxyfile_project />
+				<doxyfile_build />
+				<doxyfile_warnings />
+				<doxyfile_output />
+				<doxyfile_dot />
+				<general />
+			</DoxyBlocks>
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>
