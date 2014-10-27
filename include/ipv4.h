@@ -7,8 +7,9 @@
 
 #pragma once
 
-#include "ribanEthernet.h"
-#include "ribanethernetprotocol.h"
+#include "address.h"
+
+class ENC28J60;
 
 const static uint16_t IPV4_HEADER_SIZE = 20;
 const static uint16_t IPV4_MINLEN = 26;
@@ -32,27 +33,50 @@ const static byte ICMP_TYPE_ECHOREPLY = 0;
 const static byte ICMP_TYPE_ECHOREQUEST = 8;
 const static uint16_t ICMP_CHECKSUM_OFFSET = 2;
 
+const static byte DHCP_DISABLED     = 0; //!< DHCP disabled
+const static byte DHCP_RESET        = 1; //!< DHCP enabled but not yet requested
+const static byte DHCP_DISCOVERY    = 2; //!< DHCP requested
+const static byte DHCP_REQUESTED    = 3; //!< DHCP requested
+const static byte DHCP_BOUND        = 4; //!< DHCP bound to valid address
+const static byte DHCP_RENEWING     = 5; //!< DHCP bound, renewing lease
+const static byte DHCP_PACKET_SIZE  = 240;
+
+const static uint16_t ARP_REQUEST   = 1;
+const static uint16_t ARP_RESPONSE  = 2;
+const static uint16_t ARP_HTYPE     = 0;
+const static uint16_t ARP_PTYPE     = 2;
+const static uint16_t ARP_HLEN      = 4;
+const static uint16_t ARP_PLEN      = 5;
+const static uint16_t ARP_OPER      = 6;
+const static uint16_t ARP_SHA       = 8;
+const static uint16_t ARP_SPA       = 14;
+const static uint16_t ARP_THA       = 18;
+const static uint16_t ARP_TPA       = 24;
+
 class ArpEntry
 {
     public:
         ArpEntry()
         {
             //Reset IP and MAC addresses to all zeros
-            for(int i = 0; i < 4; ++i)
-                ip[i] = 0;
-            for(int i = 0; i < 6; ++i)
-                mac[i] = 0;
+            memset(ip, 0, 4);
+            memset(mac, 0, 6);
         };
         byte ip[4];
         byte mac[6];
 };
 
-class IPV4 : public ribanEthernet
+class IPV4
 {
     public:
-        /** @brief  Initialise class
+        /** @brief  Construct an IPV4 protocol handler
+        *   @param  pInterface Pointer to the network interface object
         */
-        void Init();
+        IPV4(ENC28J60* pInterface);
+
+        /** @brief  Destruct IPV4 protocol handler and clean up
+        */
+        ~IPV4();
 
         /** @brief  Configure network interface with static IP
         *   @param  pIp Pointer to IP address (4 bytes). 0 for no change.
@@ -70,20 +94,29 @@ class IPV4 : public ribanEthernet
         */
         void ConfigureDhcp();
 
-        /** @brief  Send packet
-        *   @param  pTxListEntry Pointer to the top-level list entry describing the IP payload
-        *   @param  nProtocol IP protocol number, e.g. ICMP=1
-        *   @param  pDestination Pointer to destination address, e.g. 4 bytes for IPv4
+        /** @brief  Starts a transmission transaction
+        *   @param  pDestination Pointer to the destination IP address
+        *   @note   Creates IP header, including parent headers, e.g. Ethernet
         */
-        void SendPacket(TxListEntry* pTxListEntry, byte nProtocol, byte* pDestination = NULL);
+        void TxBegin(Address* pDestination);
 
-        /** @brief  Send packet
-        *   @param  pData Pointer to the IP payload
-        *   @param  nLen Quantity of bytes in payload
-        *   @param  nProtocol IP protocol number, e.g. ICMP=1
-        *   @param  pDestination Pointer to destination address, e.g. 4 bytes for IPv4
+        /** @brief  Ends a transmission transaction
+        *   @param  nLen Quantity of bytes in child payload, including any grandchildren
+        *   @note   Finishes populating header and requests packet be sent
         */
-        void SendPacket(byte* pData, uint16_t nLen, byte nProtocol, byte* pDestination = NULL);
+        void TxEnd(uint16_t nLen);
+
+        /** @brief  Process packet / data
+        *   @param  nLen Quantity of data bytes in recieve buffer
+        *   @note   Must consume all expected data, e.g. return value should include any padding.
+        *   @note   If packet must be sent after processing, populate buffer with data and set m_nSendPacketLen with size of Ethernet payload
+        */
+        void Process(uint16_t nLen);
+
+        /** @brief  Process ARP packet
+        *   @param  nLen Quantity of bytes in ARP packet
+        */
+        void ProcessArp(uint16_t nLen);
 
         /** @brief  Send an echo request (ping)
         *   @param  pIp Pointer to remote host IP
@@ -101,7 +134,6 @@ class IPV4 : public ribanEthernet
         */
         void EnableIcmp(bool bEnable);
 
-
         /** @brief  Perform ARP request and update ARP cache table
         *   @param  pIp Pointer to IP address
         *   @param  nTimeout Quantity of milliseconds to wait for ARP response before abandoning ARP request as failed
@@ -115,14 +147,17 @@ class IPV4 : public ribanEthernet
         */
         static void PrintIp(byte* pIp);
 
-        byte* GetIp() { return m_pLocalIp; };
+        Address* GetIp() { return m_pLocalIp; };
         byte* GetGw() { return m_aArpTable[ARP_GATEWAY_INDEX].ip; };
         byte* GetDns() { return m_aArpTable[ARP_DNS_INDEX].ip; };
         byte* GetNetmask() { return m_pNetmask; };
         byte* GetBroadcastIp() { return m_pBroadcastIp; };
-        bool IsUsingDhcp() { return m_bUsingDhcp; };
+        bool IsUsingDhcp() { return m_nDhcpStatus != DHCP_DISABLED; };
 
     protected:
+        /** @brief  Initialise class
+        */
+        void Init();
 
     private:
         /** @brief  Process data buffer
@@ -167,21 +202,23 @@ class IPV4 : public ribanEthernet
         */
         bool IsMulticast(byte* pIp);
 
-        bool m_bUsingDhcp; //!< True if using DHCP. False if static IP configuration.
         bool m_bIcmpEnabled; //!< True to enable ICMP responses
-        byte m_pLocalIp[4]; //!< IP address of remote host
+        Address* m_pLocalIp; //!< IP address of remote host
         byte m_pRemoteIp[4]; //!< IP address of target (should be our IP, multicast or broadcast)
         byte m_pGwIp[4]; //!< Pointer to gateway / router IP address
         byte m_pDnsIp[4]; //!< Pointer to DNS IP address
         byte m_pNetmask[4]; //!< Pointer to netmask
         byte m_pSubnetIp[4]; //!< Pointer to the subnet address
         byte m_pBroadcastIp[4]; //!< Pointer to broadcast address
+        byte m_nDhcpStatus; //!< Status of DHCP configuration DHCP_DISABLED | DHCP_REQUESTED | DHCP_BOUND | DHCP_RENEWING
 
         byte m_nArpCursor; //!< Cursor holds index of next ARP table entry to update
         byte m_nIpv4Protocol; //!< IPv4 protocol of current message
         uint16_t m_nPingSequence; //!< ICMP echo response sequence number
-        uint16_t m_nIdentification; //!< IPv4 packet identification
+//        uint16_t m_nIdentification; //!< IPv4 packet identification
         uint16_t m_nIpv4Port; //!< IPv4 port number
+
+        ENC28J60* m_pInterface; //!< Pointer to network interface object
 
         #ifndef ARP_TABLE_SIZE
             #define ARP_TABLE_SIZE 2

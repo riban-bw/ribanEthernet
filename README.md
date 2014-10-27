@@ -1,10 +1,12 @@
-ribanEthernet
+ribanENC28J60
 =============
 
-Extensible Ethernet controller library for Arduino
+Ethernet controller library for Arduino
 
-This library provides an extensible Ethernet interface. It interfaces with Ethernet hardware, e.g. ENC28J60. It allows different protocols to be added via a plugin style system. Each protocol is provided as a class / library which processes the Ethernet buffer.
+This library provides a socket based Ethernet interface. It interfaces with Ethernet hardware via ENC28J60 library. IPV4, IPV6 & RAW sockets are implemented. ARP, ICMP, DHCP and DNS are implemented. Higher level protocols may be added later but may be impelented using the socket interface.
 
 
-This library is licenced under the LGPL and is copyright (c) Brian Walton. It is derived from work by Pascal Stang and Guido Socher.
+This library is licenced under the LGPL and is copyright (c) Brian Walton.
 The source code is available at https://github.com/riban-bw/ribanEthernet.git.
+
+
